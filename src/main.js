@@ -18,7 +18,7 @@ class LocusLucis {
     this.time = 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, transparent: true, alpha: true });
-    this.renderer.setPixelRatio(navigator.userAgentData.mobile ? 0.1 : window.devicePixelRatio);
+    this.renderer.setPixelRatio(/Android|iPhone/i.test(navigator.userAgent) ? 0.1 : window.devicePixelRatio);
     this.renderer.setSize(this.width, this.height);
     this.renderer.setAnimationLoop(this.render.bind(this));
     this.renderer.setClearAlpha(0.0);
@@ -48,7 +48,7 @@ class LocusLucis {
 
     this.uniforms = {
       lines   : { value: this.line_geometry       },
-      quality : { value: navigator.userAgentData.mobile ? 0.1 : window.devicePixelRatio },
+      quality : { value: /Android|iPhone/i.test(navigator.userAgent) ? 0.1 : window.devicePixelRatio },
     }
 
     this.resize();
