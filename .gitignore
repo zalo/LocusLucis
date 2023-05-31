@@ -44,20 +44,10 @@ jspm_packages/
 !node_modules/three/examples/*/
 !node_modules/three/examples/jsm/
 !node_modules/three/examples/jsm/*/
-!node_modules/three/examples/jsm/controls/
-!node_modules/three/examples/jsm/controls/*
 !node_modules/three/examples/jsm/libs/
 !node_modules/three/examples/jsm/libs/*
 !node_modules/three/examples/jsm/utils/
 !node_modules/three/examples/jsm/utils/*
-!node_modules/three/examples/jsm/loaders/
-!node_modules/three/examples/jsm/loaders/*
-!node_modules/three/examples/jsm/environments/
-!node_modules/three/examples/jsm/environments/*
-!node_modules/three/examples/textures/
-!node_modules/three/examples/textures/*
-!node_modules/three/examples/textures/equirectangular/
-!node_modules/three/examples/textures/equirectangular/*
 
 # TypeScript v1 declaration files
 typings/
