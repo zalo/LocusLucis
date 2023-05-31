@@ -18,7 +18,7 @@ class LocusLucis {
     this.time = 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, transparent: true, alpha: true });
-    this.renderer.setPixelRatio( window.devicePixelRatio );
+    this.renderer.setPixelRatio(navigator.userAgentData.mobile ? 0.1 : window.devicePixelRatio);
     this.renderer.setSize(this.width, this.height);
     this.renderer.setAnimationLoop(this.render.bind(this));
     this.renderer.setClearAlpha(0.0);
@@ -32,33 +32,35 @@ class LocusLucis {
     //window.addEventListener('pointerup', ()=>{ this.lastTime=this.time; });
     //window.addEventListener('pointermove', ()=>{ this.lastTime=this.time; });
     //window.addEventListener('wheel', ()=>{ this.lastTime=this.time; });
+
+    this.line_geometry = [
+      //new THREE.Vector4(0.1 ,0.1 ,0.9  ,0.3 ), //Floor
+      //new THREE.Vector4(0.1 ,0.1 ,0.05 ,0.95), //Vertical wall
+      //new THREE.Vector4(0.05,0.95,0.4  ,0.8 ), //Small ceiling
+      //new THREE.Vector4(0.5 ,0.77,0.9  ,0.4 ), //Ceiling higher up
+      new THREE.Vector4(0.45 ,0.40 , 0.45 ,0.60),
+      new THREE.Vector4(0.45 ,0.40 , 0.55 ,0.40), 
+      new THREE.Vector4(0.55 ,0.60 , 0.55 ,0.40), 
+      new THREE.Vector4(0.55 ,0.60 , 0.45 ,0.60), 
+      new THREE.Vector4(0.25 ,0.75 , 0.25 ,0.5 ), //Wall in front of emissive
+      new THREE.Vector4(0.725 ,0.8  , 0.75,0.65), //Emissive red
+    ];
+
+    this.uniforms = {
+      lines   : { value: this.line_geometry       },
+      quality : { value: navigator.userAgentData.mobile ? 0.1 : window.devicePixelRatio },
+    }
+
     this.resize();
 
     fetch('./assets/Lighting.glsl')
       .then(data => data.text())
       .then(shaderText => {
         console.log("Loaded Lighting Shader!");
-        this.line_geometry = [
-          //new THREE.Vector4(0.1 ,0.1 ,0.9  ,0.3 ), //Floor
-          //new THREE.Vector4(0.1 ,0.1 ,0.05 ,0.95), //Vertical wall
-          //new THREE.Vector4(0.05,0.95,0.4  ,0.8 ), //Small ceiling
-          //new THREE.Vector4(0.5 ,0.77,0.9  ,0.4 ), //Ceiling higher up
-          new THREE.Vector4(0.45 ,0.40 , 0.45 ,0.60),
-          new THREE.Vector4(0.45 ,0.40 , 0.55 ,0.40), 
-          new THREE.Vector4(0.55 ,0.60 , 0.55 ,0.40), 
-          new THREE.Vector4(0.55 ,0.60 , 0.45 ,0.60), 
-          new THREE.Vector4(0.25 ,0.75 , 0.25 ,0.5 ), //Wall in front of emissive
-          new THREE.Vector4(0.725 ,0.8  , 0.75,0.65), //Emissive red
-        ];
 
-        this.uniforms = {
-          lines                     : { value: this.line_geometry       },
-          rejectionAngle            : { value: 0.8                      },
-          maxSteps                  : { value: 50.0                     }
-        }
         this.gui = new GUI()
-        this.gui.add(this.uniforms.rejectionAngle, 'value', -1.0,   1.0).name('Rejection Angle');
-        this.gui.add(this.uniforms.maxSteps      , 'value', 20.0, 150.0).name('Quality');
+        this.gui.add(this.uniforms.quality, 'value', 0.1, 1.0).name('Quality')
+          .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.quality.value); })
         this.gui.open();
 
         this.reprojectionMaterial = new THREE.ShaderMaterial( {
