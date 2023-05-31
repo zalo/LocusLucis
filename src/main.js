@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GUI } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
-import { Debug } from './Debug';
+import { Debug } from './debug.js';
 
 class LocusLucis {
   constructor() {
