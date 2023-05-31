@@ -1,7 +1,11 @@
 import * as THREE from 'three';
-import { GUI                 } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
+import { GUI } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
+import { Debug } from './Debug';
+
 class LocusLucis {
   constructor() {
+    let debug = new Debug();
+
     this.container = document.createElement( 'div' );
     document.body.appendChild( this.container );
 
@@ -18,7 +22,7 @@ class LocusLucis {
     this.time = 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, transparent: true, alpha: true });
-    this.renderer.setPixelRatio(/Android|iPhone/i.test(navigator.userAgent) ? 0.1 : window.devicePixelRatio);
+    this.renderer.setPixelRatio(debug.mobile ? 0.1 : window.devicePixelRatio);
     this.renderer.setSize(this.width, this.height);
     this.renderer.setAnimationLoop(this.render.bind(this));
     this.renderer.setClearAlpha(0.0);
@@ -48,7 +52,7 @@ class LocusLucis {
 
     this.uniforms = {
       lines   : { value: this.line_geometry       },
-      quality : { value: /Android|iPhone/i.test(navigator.userAgent) ? 0.1 : window.devicePixelRatio },
+      quality : { value: debug.mobile ? 0.1 : window.devicePixelRatio },
     }
 
     this.resize();
