@@ -15,7 +15,7 @@ class LocusLucis {
     this.width  = window.innerWidth;
     this.height = window.innerHeight;
 
-    this.camera = new THREE.PerspectiveCamera( 45, this.width / this.height, 1.0, 2000.0 );
+    this.camera = new THREE.PerspectiveCamera( 35, this.width / this.height, 1.0, 2000.0 );
     this.camera.position.set( 0, 0, 100 );
     this.scene.add(this.camera);
 
@@ -39,8 +39,8 @@ class LocusLucis {
       this.uniforms = {
         //map                   : { value: /*this.testTexture*/ null },
         lineResolution        : { value: 512 },
-        angularResolution     : { value: 128 },
-        stepDistance          : { value: 0.001 },
+        angularResolution     : { value: 512 },
+        stepDistance          : { value: 0.008 },
         stepDirection         : { value: 0.00 },
         outputResolutionScale : { value: 1.0 },
       }
@@ -48,17 +48,15 @@ class LocusLucis {
       this.gui = new GUI()
       //this.gui.add(this.uniforms.       lineResolution, 'value', 0.1  , 1.0 ).name('Line Resolution');
       //this.gui.add(this.uniforms.    angularResolution, 'value', 0.1  , 1.0 ).name('Angular Resolution');
-      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.01).name('Step Distance');
-      this.gui.add(this.uniforms.        stepDirection, 'value', 0.0,   6.28).name('Step Direction');
+      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.03).name('Step Distance');
+      this.gui.add(this.uniforms.        stepDirection, 'value', 0.0,   6.28318530718).name('Step Direction');
       this.gui.add(this.uniforms.outputResolutionScale, 'value', 0.1  , 1.0 ).name('Quality')
         .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.outputResolutionScale.value); });
       this.gui.open();
   
       this.isovistComputation = new MultiTargetGPUComputationRenderer(
                                   this.uniforms.lineResolution.value, this.uniforms.angularResolution.value, this.renderer);
-      this.initialIsovist     = this.isovistComputation.createTexture();
-      this.isovist            = this.isovistComputation.addVariable("textureIsovist"    , this.initialIsovist);
-
+      this.isovist = this.isovistComputation.addVariable("textureIsovist");
       this.isovistPass = this.isovistComputation.addPass(this.isovist, [], `
         out highp vec4 pc_fragColor;
         uniform sampler2D map;
@@ -75,18 +73,44 @@ class LocusLucis {
             return vec2( tN, tF );
         }
 
-        void main() {
-          vec2 uv = gl_FragCoord.xy / resolution.xy; //vec2(lineResolution, angularResolution);//
-          vec2 direction = vec2(cos(stepDirection), sin(stepDirection));
-          vec2 boxIntersections = boxIntersection(uv, direction, vec2(1.0, 1.0));
+        void isovistUVToLinePosDir(in vec2 uv, out vec2 boxIntersections, out vec2 direction, out vec2 lineUV) {
+          float angularCoordinate = uv.y * 6.28318530718;
 
-          //vec4 colorToDraw = texture2D(map, uv);
-          vec4 colorToDraw = vec4(1.0, 1.0, 1.0, 1.0);
-          for(float i = boxIntersections.x; i < 0.0; i += stepDistance) {
-            vec4 sampledColor = texture2D(map, uv + (direction * i));
-            if(sampledColor.g < 1.0) {
-              colorToDraw = sampledColor;
+          // Calculate where on the line we are
+          vec2 lineDirection      = vec2(cos(angularCoordinate + 1.57079632679), 
+                                         sin(angularCoordinate + 1.57079632679));
+          vec2 lineBoxIntersects  = boxIntersection(vec2(0.0, 0.0), lineDirection, vec2(0.5, 0.5));
+          lineUV                  =  (lineDirection * mix(lineBoxIntersects.x, lineBoxIntersects.y, uv.x));
+
+          // Calculate where we are sweeping from and to
+          direction               = vec2(cos(angularCoordinate), 
+                                         sin(angularCoordinate));
+          boxIntersections        = boxIntersection(lineUV, direction, vec2(0.5, 0.5));
+        }
+
+        void main() {
+          vec2 boxIntersections, direction, lineUV;
+          isovistUVToLinePosDir(gl_FragCoord.xy / resolution.xy, boxIntersections, direction, lineUV);
+
+          // Record the first four hits along this line
+          vec4 lastColor   = vec4(1.0, 1.0, 1.0, 1.0);
+          vec4 colorToDraw = vec4(-1000.0, -1000.0, -1000.0, -1000.0);
+          for(float i = boxIntersections.x; i < boxIntersections.y; i += stepDistance) {
+            vec4 sampledColor = texture2D(map, vec2(0.5, 0.5) + lineUV + (direction * i));
+            if(lastColor == vec4(1.0, 1.0, 1.0, 1.0) && sampledColor.g < 1.0) {
+              // Record this hit position in successive color channels
+              if (colorToDraw.x == -1000.0) {
+                colorToDraw.r = abs(i);
+              } else if (colorToDraw.y == -1000.0) {
+                colorToDraw.g = abs(i);
+              } else if (colorToDraw.z == -1000.0) {
+                colorToDraw.b = abs(i);
+              } else if (colorToDraw.w == -1000.0) {
+                colorToDraw.a = abs(i);
+                break;
+              }
             }
+            lastColor = sampledColor;
           }
 
           pc_fragColor = colorToDraw;
@@ -105,11 +129,12 @@ class LocusLucis {
         { map: this.isovistComputation.getCurrentRenderTarget(this.isovist).texture, side: THREE.DoubleSide });
       this.labelPlane = new THREE.PlaneGeometry(50, 50);
       this.labelMesh = new THREE.Mesh(this.labelPlane, this.labelMaterial);
-      this.labelMesh.position.set(50, 0, 0);
+      this.labelMesh.position.set(25, 0, 0);
       this.labelMesh.scale   .set(1, 1, 1);
       this.scene.add(this.labelMesh);
 
-      this.uniforms["map"] = { value: null };
+      this.uniforms["isovist"] = { value: null };
+      this.uniforms["map"]     = { value: this.testTexture };
 
       this.reprojectionMaterial = new THREE.ShaderMaterial( {
         side: THREE.FrontSide,
@@ -124,21 +149,66 @@ class LocusLucis {
               //gl_Position = vec4( ( uv - 0.5 ) * 2.0, 0.0, 1.0 );
           }`,
         fragmentShader: `
-          uniform sampler2D map;
+          uniform sampler2D isovist, map;
           uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale;
           varying vec2 vUv;
 
-          #include <common>
-          #include <dithering_pars_fragment>
+          vec2 boxIntersection( in vec2 ro, in vec2 rd, in vec2 rad ) {
+            vec2 m = 1.0/rd;
+            vec2 n = m*ro;
+            vec2 k = abs(m)*rad;
+            vec2 t1 = -n - k;
+            vec2 t2 = -n + k;
+            float tN = max( t1.x, t1.y );
+            float tF = min( t2.x, t2.y );
+            return vec2( tN, tF );
+          }
+
+          float invMix(float from, float to, float value){
+            return (value - from) / (to - from);
+          }
+  
+          void mapUVToIsovistUVT(in vec2 uv, in float angle, out vec2 isovistUV, out float isovistT) {
+            vec2 lineDirection      = vec2(cos(angle + 1.57079632679), 
+                                           sin(angle + 1.57079632679));
+            // Project the current uv onto the line direction to get lineUV (which is in box-centered space)
+            float lineT             = dot(uv - vec2(0.5, 0.5), lineDirection);
+            vec2 lineUV             = lineDirection * lineT;
+  
+            // Calculate the from/to of the sweep
+            vec2 direction          = vec2(cos(angle), 
+                                           sin(angle));
+            vec2 boxIntersections   = boxIntersection(lineUV, direction, vec2(0.5, 0.5));
+  
+            vec2 lineBoxIntersects  = boxIntersection(vec2(0.0, 0.0), lineDirection, vec2(0.5, 0.5));
+            isovistUV = vec2(invMix(lineBoxIntersects.x, lineBoxIntersects.y, lineT), angle/6.28318530718);
+  
+            // Calculate the current i
+            isovistT  = dot(uv - vec2(0.5, 0.5), direction);
+          }
 
           void main() {
-            gl_FragColor = texture2D(map, vUv);
-            #include <dithering_fragment>
+            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+            float contribution = 1.0/angularResolution;
+            float increment = 6.28318530718/angularResolution;
+            for (float angle = 0.0; angle < 6.28318530718; angle += increment) {
+              vec2 isovistUV;
+              float isovistT;
+              mapUVToIsovistUVT(vUv, angle, isovistUV, isovistT);
+              vec4 isovistDepths = texture2D(isovist, isovistUV);
+
+              if (isovistT < isovistDepths.r ||
+                  isovistT < isovistDepths.g ||
+                  isovistT < isovistDepths.b ||
+                  isovistT < isovistDepths.a) {
+                gl_FragColor.rgb -= vec3(contribution, contribution, contribution);
+              }
+            }
           }`
       });
   
       this.reprojectionMesh = new THREE.Mesh( new THREE.PlaneGeometry( 50, 50 ), this.reprojectionMaterial );
-      this.reprojectionMesh.position.set(0, 0, 0);
+      this.reprojectionMesh.position.set(-25, 0, 0);
       this.reprojectionMesh.scale   .set(1, 1, 1);
       this.scene.add(this.reprojectionMesh);
 
@@ -166,7 +236,7 @@ class LocusLucis {
     if (this.isovistComputation) {
       this.isovistComputation.compute();
 
-      this.uniforms["map"].value = this.isovistComputation.getCurrentRenderTarget(this.isovist).texture;
+      this.uniforms["isovist"].value = this.isovistComputation.getCurrentRenderTarget(this.isovist).texture;
     }
 
     //if(this.time - this.lastTime < 500){
