@@ -168,42 +168,80 @@ class LocusLucis {
             return (value - from) / (to - from);
           }
   
-          void mapUVToIsovistUVT(in vec2 uv, in float angle, out vec2 isovistUV, out float isovistT) {
+          void mapUVToIsovistUVT(in vec2 uv, in float angle, out vec2 lineUV, out vec2 direction,  out vec2 isovistUV, out float isovistT) {
             vec2 lineDirection      = vec2(cos(angle + 1.57079632679), 
                                            sin(angle + 1.57079632679));
             // Project the current uv onto the line direction to get lineUV (which is in box-centered space)
             float lineT             = dot(uv - vec2(0.5, 0.5), lineDirection);
-            vec2 lineUV             = lineDirection * lineT;
+            lineUV                  = lineDirection * lineT;
   
             // Calculate the from/to of the sweep
-            vec2 direction          = vec2(cos(angle), 
+            direction               = vec2(cos(angle),
                                            sin(angle));
             vec2 boxIntersections   = boxIntersection(lineUV, direction, vec2(0.5, 0.5));
-  
+
             vec2 lineBoxIntersects  = boxIntersection(vec2(0.0, 0.0), lineDirection, vec2(0.5, 0.5));
             isovistUV = vec2(invMix(lineBoxIntersects.x, lineBoxIntersects.y, lineT), angle/6.28318530718);
-  
+            //isovistUV = vec2(round(isovistUV.x *    lineResolution)/   lineResolution, 
+            //                 round(isovistUV.y * angularResolution)/angularResolution);
+
             // Calculate the current i
             isovistT  = dot(uv - vec2(0.5, 0.5), direction);
           }
 
           void main() {
-            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-            float contribution = 1.0/angularResolution;
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            float occlusion = 0.0;
             float increment = 6.28318530718/angularResolution;
             for (float angle = 0.0; angle < 6.28318530718; angle += increment) {
-              vec2 isovistUV;
+              vec2 isovistUV, lineUV, direction;
               float isovistT;
-              mapUVToIsovistUVT(vUv, angle, isovistUV, isovistT);
+              mapUVToIsovistUVT(vUv, angle, lineUV, direction, isovistUV, isovistT);
               vec4 isovistDepths = texture2D(isovist, isovistUV);
+
+              //float depthToSample = 0.0;
+
+              //if (isovistT < isovistDepths.r){
+              //  depthToSample = isovistDepths.r;
+              //}
+              //else if (isovistT < isovistDepths.g){
+              //  depthToSample = isovistDepths.g;
+              //}else if (isovistT < isovistDepths.b){
+              //  depthToSample = isovistDepths.b;
+              //}else if (isovistT < isovistDepths.a){
+              //  depthToSample = isovistDepths.a;
+              //}
+
+              //if (isovistT < isovistDepths.a){
+              //  depthToSample = isovistDepths.a;
+              //}else if (isovistT < isovistDepths.b){
+              //  depthToSample = isovistDepths.b;
+              //}else if (isovistT < isovistDepths.g){
+              //  depthToSample = isovistDepths.g;
+              //}else if (isovistT < isovistDepths.r){
+              //  depthToSample = isovistDepths.r;
+              //}
+
+              //if (depthToSample != 0.0){
+              //  //depthToSample -= 0.001;
+              //  //gl_FragColor.rgb += texture2D(map, vec2(0.5, 0.5) + lineUV + (direction * depthToSample)).rgb;
+              //  gl_FragColor.rgb += vec3(0.0);
+              //}else{
+              //  gl_FragColor.rgb += vec3(1.0);
+              //}
 
               if (isovistT < isovistDepths.r ||
                   isovistT < isovistDepths.g ||
                   isovistT < isovistDepths.b ||
                   isovistT < isovistDepths.a) {
-                gl_FragColor.rgb -= vec3(contribution, contribution, contribution);
+                //gl_FragColor.rgb += vec3(1.0, 1.0, 1.0);
+                occlusion += 1.0;
               }
             }
+
+            occlusion /= angularResolution;
+            occlusion = 1.0 - occlusion;
+            gl_FragColor.rgb = vec3(occlusion);//, occlusion, occlusion);
           }`
       });
   
