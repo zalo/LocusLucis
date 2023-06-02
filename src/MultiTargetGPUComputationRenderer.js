@@ -439,41 +439,31 @@ class MultiTargetGPUComputationRenderer {
             } else {
                 this.doRenderTarget(passThruShader, output);
             }
-            
 
             passThruUniforms.passThruTexture.value = null;
 
         };
 
         this.doRenderTarget = function (material, output) {
-
             const currentRenderTarget = renderer.getRenderTarget();
-
             mesh.material = material;
             renderer.setRenderTarget(output);
             renderer.render(scene, camera);
             mesh.material = passThruShader;
-
             renderer.setRenderTarget(currentRenderTarget);
-
         };
 
         // Shaders
 
         function getPassThroughVertexShader() {
             return `
-			in vec3 position;
-
-			uniform mat4 modelViewMatrix;
-			uniform mat4 projectionMatrix;
-
-			void main() {
-
-				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-
-				gl_Position = projectionMatrix * mvPosition;
-
-			}`
+            in vec3 position;
+            uniform mat4 modelViewMatrix;
+            uniform mat4 projectionMatrix;
+            void main() {
+                vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+                gl_Position = projectionMatrix * mvPosition;
+            }`
         }
 
         function getPassThroughFragmentShader() {
@@ -481,15 +471,12 @@ class MultiTargetGPUComputationRenderer {
             return `
             out highp vec4 pc_fragColor;
             uniform sampler2D passThruTexture;
-                void main() {
-                	vec2 uv = gl_FragCoord.xy / resolution.xy;
-                	pc_fragColor = texture2D( passThruTexture, uv );
-                }`;
-
+            void main() {
+                vec2 uv = gl_FragCoord.xy / resolution.xy;
+                pc_fragColor = texture2D( passThruTexture, uv );
+            }`;
         }
-
     }
-
 }
 
 export { MultiTargetGPUComputationRenderer };
