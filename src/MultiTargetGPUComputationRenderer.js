@@ -135,12 +135,9 @@ class MultiTargetGPUComputationRenderer {
         const mesh = new Mesh(new PlaneGeometry(2, 2), passThruShader);
         scene.add(mesh);
 
-
         this.setDataType = function (type) {
-
             dataType = type;
             return this;
-
         };
 
         this.addVariable = function (variableName, initialValueTexture, count) {
@@ -452,6 +449,19 @@ class MultiTargetGPUComputationRenderer {
             mesh.material = passThruShader;
             renderer.setRenderTarget(currentRenderTarget);
         };
+
+        this.dispose = function(){
+            for (let i = 0; i < this.passes; i++) {
+                this.passes[i].material.dispose();
+            }
+
+            for (let i = 0; i < this.variables.length; i++) {
+                this.variables[i].renderTargets[0].dispose();
+                this.variables[i].renderTargets[1].dispose();
+            }
+
+            passThruShader.dispose();
+        }
 
         // Shaders
 
