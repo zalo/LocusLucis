@@ -40,16 +40,18 @@ class LocusLucis {
         //map                   : { value: /*this.testTexture*/ null },
         lineResolution        : { value: 512 },
         angularResolution     : { value: 512 },
-        stepDistance          : { value: 0.008 },
+        stepDistance          : { value: 0.005 },
         stepDirection         : { value: 0.00 },
+        sampleBias            : { value: 0.003 },
         outputResolutionScale : { value: 1.0 },
       }
   
       this.gui = new GUI()
       //this.gui.add(this.uniforms.       lineResolution, 'value', 0.1  , 1.0 ).name('Line Resolution');
       //this.gui.add(this.uniforms.    angularResolution, 'value', 0.1  , 1.0 ).name('Angular Resolution');
-      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.03).name('Step Distance');
+      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.01).name('Step Distance');
       this.gui.add(this.uniforms.        stepDirection, 'value', 0.0,   6.28318530718).name('Step Direction');
+      this.gui.add(this.uniforms.           sampleBias, 'value', -0.01, 0.01).name('Bias');
       this.gui.add(this.uniforms.outputResolutionScale, 'value', 0.1  , 1.0 ).name('Quality')
         .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.outputResolutionScale.value); });
       this.gui.open();
@@ -70,7 +72,7 @@ class LocusLucis {
             vec2 t2 = -n + k;
             float tN = max( t1.x, t1.y );
             float tF = min( t2.x, t2.y );
-            return vec2( tN, tF );
+            return vec2( tN, tF );//vec2( -0.5, 0.5 );//
         }
 
         void isovistUVToLinePosDir(in vec2 uv, out vec2 boxIntersections, out vec2 direction, out vec2 lineUV) {
@@ -81,6 +83,8 @@ class LocusLucis {
                                          sin(angularCoordinate + 1.57079632679));
           vec2 lineBoxIntersects  = boxIntersection(vec2(0.0, 0.0), lineDirection, vec2(0.5, 0.5));
           lineUV                  =  (lineDirection * mix(lineBoxIntersects.x, lineBoxIntersects.y, uv.x));
+          //lineUV = vec2(round(lineUV.x * 512.0) / 512.0,
+          //              round(lineUV.y * 512.0) / 512.0);
 
           // Calculate where we are sweeping from and to
           direction               = vec2(cos(angularCoordinate), 
@@ -96,24 +100,24 @@ class LocusLucis {
           vec4 lastColor   = vec4(1.0, 1.0, 1.0, 1.0);
           vec4 colorToDraw = vec4(-1000.0, -1000.0, -1000.0, -1000.0);
           for(float i = boxIntersections.x; i < boxIntersections.y; i += stepDistance) {
-            vec4 sampledColor = texture2D(map, vec2(0.5, 0.5) + lineUV + (direction * i));
-            if(lastColor == vec4(1.0, 1.0, 1.0, 1.0) && sampledColor.g < 1.0) {
+            vec2 samplePosition = vec2(0.5, 0.5) + lineUV + (direction * i);
+            //samplePosition = vec2(round(samplePosition.x * 512.0) / 512.0,
+            //                      round(samplePosition.y * 512.0) / 512.0);
+            vec4 sampledColor = texture2D(map, samplePosition);
+            if(lastColor == vec4(1.0, 1.0, 1.0, 1.0) && sampledColor.g < 1.0){// ||
+               //lastColor != vec4(1.0, 1.0, 1.0, 1.0) && sampledColor == vec4(1.0, 1.0, 1.0, 1.0) ) {
               // Record this hit position in successive color channels
-              if (colorToDraw.x == -1000.0) {
-                colorToDraw.r = i;
-              } else if (colorToDraw.y == -1000.0) {
-                colorToDraw.g = i;
-              } else if (colorToDraw.z == -1000.0) {
-                colorToDraw.b = i;
-              } else if (colorToDraw.w == -1000.0) {
-                colorToDraw.a = i;
+                     if (colorToDraw.x == -1000.0) { colorToDraw.r = i;
+              } else if (colorToDraw.y == -1000.0) { colorToDraw.g = i;
+              } else if (colorToDraw.z == -1000.0) { colorToDraw.b = i;
+              } else if (colorToDraw.w == -1000.0) { colorToDraw.a = i;
                 break;
               }
             }
             lastColor = sampledColor;
           }
 
-          pc_fragColor = colorToDraw;
+          pc_fragColor = colorToDraw + 0.5;
         }`);
       Object.assign(this.isovistPass.material.uniforms, this.uniforms);
       this.isovistPass.material.uniforms["map"] = { value: this.testTexture };
@@ -150,7 +154,7 @@ class LocusLucis {
           }`,
         fragmentShader: `
           uniform sampler2D isovist, map;
-          uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale;
+          uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale, sampleBias;
           varying vec2 vUv;
 
           vec2 boxIntersection( in vec2 ro, in vec2 rd, in vec2 rad ) {
@@ -161,7 +165,7 @@ class LocusLucis {
             vec2 t2 = -n + k;
             float tN = max( t1.x, t1.y );
             float tF = min( t2.x, t2.y );
-            return vec2( tN, tF );
+            return vec2( tN, tF );//vec2( -0.5, 0.5 );//
           }
 
           float invMix(float from, float to, float value){
@@ -173,8 +177,11 @@ class LocusLucis {
                                            sin(angle + 1.57079632679));
             // Project the current uv onto the line direction to get lineUV (which is in box-centered space)
             float lineT             = dot(uv - vec2(0.5, 0.5), lineDirection);
+            lineT                   = round(lineT * lineResolution) / lineResolution;
             lineUV                  = lineDirection * lineT;
-  
+            lineUV = vec2(round(lineUV.x * 512.0) / 512.0,
+                          round(lineUV.y * 512.0) / 512.0);
+
             // Calculate the from/to of the sweep
             direction               = vec2(cos(angle),
                                            sin(angle));
@@ -190,58 +197,35 @@ class LocusLucis {
           }
 
           void main() {
-            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-            float occlusion = 0.0;
-            float increment = 6.28318530718/angularResolution;
-            for (float angle = 0.0; angle < 6.28318530718; angle += increment) {
-              vec2 isovistUV, lineUV, direction;
-              float isovistT;
-              mapUVToIsovistUVT(vUv, angle, lineUV, direction, isovistUV, isovistT);
-              vec4 isovistDepths = texture2D(isovist, isovistUV);
+            gl_FragColor = texture2D(map, vUv);
 
-              //float depthToSample = 0.0;
+            if(gl_FragColor == vec4(1.0)){
+              float increment = 6.28318530718/angularResolution;
+              for (float angle = 0.0; angle < 6.28318530718; angle += increment) {
+                vec2 isovistUV, lineUV, direction;
+                float isovistT;
+                mapUVToIsovistUVT(vUv, angle, lineUV, direction, isovistUV, isovistT);
+                vec4 isovistDepths = texture2D(isovist, isovistUV) - 0.5;
 
-              //if (isovistT < isovistDepths.r){
-              //  depthToSample = isovistDepths.r;
-              //}
-              //else if (isovistT < isovistDepths.g){
-              //  depthToSample = isovistDepths.g;
-              //}else if (isovistT < isovistDepths.b){
-              //  depthToSample = isovistDepths.b;
-              //}else if (isovistT < isovistDepths.a){
-              //  depthToSample = isovistDepths.a;
-              //}
+                float depthToSample = 0.0;
+                      if (isovistT < isovistDepths.r){ depthToSample = isovistDepths.r;
+                }else if (isovistT < isovistDepths.g){ depthToSample = isovistDepths.g;
+                }else if (isovistT < isovistDepths.b){ depthToSample = isovistDepths.b;
+                }else if (isovistT < isovistDepths.a){ depthToSample = isovistDepths.a; }
 
-              //if (isovistT < isovistDepths.a){
-              //  depthToSample = isovistDepths.a;
-              //}else if (isovistT < isovistDepths.b){
-              //  depthToSample = isovistDepths.b;
-              //}else if (isovistT < isovistDepths.g){
-              //  depthToSample = isovistDepths.g;
-              //}else if (isovistT < isovistDepths.r){
-              //  depthToSample = isovistDepths.r;
-              //}
-
-              //if (depthToSample != 0.0){
-              //  //depthToSample -= 0.001;
-              //  //gl_FragColor.rgb += texture2D(map, vec2(0.5, 0.5) + lineUV + (direction * depthToSample)).rgb;
-              //  gl_FragColor.rgb += vec3(0.0);
-              //}else{
-              //  gl_FragColor.rgb += vec3(1.0);
-              //}
-
-              if (isovistT < isovistDepths.r ||
-                  isovistT < isovistDepths.g ||
-                  isovistT < isovistDepths.b ||
-                  isovistT < isovistDepths.a) {
-                //gl_FragColor.rgb += vec3(1.0, 1.0, 1.0);
-                occlusion += 1.0;
+                if (depthToSample != 0.0){
+                  depthToSample += sampleBias;
+                  vec2 samplePosition = vec2(0.5, 0.5) + lineUV + (direction * depthToSample);
+                  //samplePosition = vec2(round(samplePosition.x * 512.0) / 512.0,
+                  //                      round(samplePosition.y * 512.0) / 512.0);
+                  gl_FragColor.rgb += texture2D(map, samplePosition).rgb;
+                }else{
+                  gl_FragColor.rgb += vec3(0.5);
+                }
               }
-            }
 
-            occlusion /= angularResolution;
-            occlusion = 1.0 - occlusion;
-            gl_FragColor.rgb = vec3(occlusion);//, occlusion, occlusion);
+              gl_FragColor.rgb /= angularResolution;
+            }
           }`
       });
   
