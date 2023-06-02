@@ -1,9 +1,9 @@
-name: TestSim - Build Site
+name: Build Site
 
 on:
   push:
     branches:
-      - main
+      - feat-line-sweep
 
 jobs:
   test:
