@@ -100,13 +100,13 @@ class LocusLucis {
             if(lastColor == vec4(1.0, 1.0, 1.0, 1.0) && sampledColor.g < 1.0) {
               // Record this hit position in successive color channels
               if (colorToDraw.x == -1000.0) {
-                colorToDraw.r = abs(i);
+                colorToDraw.r = i;
               } else if (colorToDraw.y == -1000.0) {
-                colorToDraw.g = abs(i);
+                colorToDraw.g = i;
               } else if (colorToDraw.z == -1000.0) {
-                colorToDraw.b = abs(i);
+                colorToDraw.b = i;
               } else if (colorToDraw.w == -1000.0) {
-                colorToDraw.a = abs(i);
+                colorToDraw.a = i;
                 break;
               }
             }
