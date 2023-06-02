@@ -39,21 +39,21 @@ class LocusLucis {
       this.uniforms = {
         lineResolution        : { value: 512 },
         angularResolution     : { value: 512 },
-        stepDistance          : { value: 0.006 },
-        stepDirection         : { value: 2.0 },
+        stepDistance          : { value: 0.008 },
+        sunDirection          : { value: 2.0 },
         emissivity            : { value: 1.00 },
         outputResolutionScale : { value: 1.0 },
       }
-  
+
       this.gui = new GUI()
-      this.gui.add(this.uniforms.lineResolution, 'value', 64.0, 1024.0, 64.0).name('Line Resolution')
+      this.gui.add(this.uniforms.         sunDirection, 'value',   0.1,    6.2      ).name('Sun Direction');
+      this.gui.add(this.uniforms.           emissivity, 'value',   1.0,    5.0      ).name('Emissivity');
+      this.gui.add(this.uniforms.       lineResolution, 'value',  64.0, 1024.0, 64.0).name('Line Resolution')
         .onChange(() => { this.createRadiositySystem(this.uniforms.lineResolution, this.uniforms.angularResolution); });
-      this.gui.add(this.uniforms.angularResolution, 'value', 64.0, 1024.0, 64.0).name('Angular Resolution')
+      this.gui.add(this.uniforms.    angularResolution, 'value',  64.0, 1024.0, 64.0).name('Angular Resolution')
         .onChange(() => { this.createRadiositySystem(this.uniforms.lineResolution, this.uniforms.angularResolution); });
-      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.01).name('Step Distance');
-      this.gui.add(this.uniforms.        stepDirection, 'value', 0.0,   6.28318530718).name('Step Direction');
-      this.gui.add(this.uniforms.           emissivity, 'value', 1.0, 5.0).name('Emissivity');
-      this.gui.add(this.uniforms.outputResolutionScale, 'value', 0.1  , 1.0 ).name('Quality')
+      this.gui.add(this.uniforms.         stepDistance, 'value',   0.001,  0.01     ).name('Step Distance');
+      this.gui.add(this.uniforms.outputResolutionScale, 'value',   0.1  ,  1.0      ).name('Resolution Scale')
         .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.outputResolutionScale.value); });
       this.gui.open();
 
@@ -116,7 +116,7 @@ class LocusLucis {
     this.isovistPass = this.isovistComputation.addPass(this.isovist, [], `
       out highp vec4 pc_fragColor;
       uniform sampler2D map;
-      uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale;
+      uniform float lineResolution, angularResolution, stepDistance, sunDirection, outputResolutionScale;
 
       `+this.commonFunctions+`
 
@@ -180,7 +180,7 @@ class LocusLucis {
         }`,
       fragmentShader: `
         uniform sampler2D isovist, map;
-        uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale, emissivity;
+        uniform float lineResolution, angularResolution, stepDistance, sunDirection, outputResolutionScale, emissivity;
         varying vec2 vUv;
 
         `+this.commonFunctions+`
@@ -230,27 +230,15 @@ class LocusLucis {
                 vec2 samplePosition = vec2(0.5, 0.5) + lineUV + (direction * depthToSample);
                 gl_FragColor.rgb += texture2D(map, samplePosition).rgb * emissivity;
               }else{
-                // TODO: Add the sky lighting contribution...
-
-                // From: https://www.shadertoy.com/view/NttSW7
+                // Add the Sky Lighting Contribution; From: https://www.shadertoy.com/view/NttSW7
                 const vec3 SkyColor = vec3(0.2,0.5,1.);
                 const vec3 SunColor = vec3(1.,0.7,0.1)*10.;
-                float SunA = stepDirection;//2.; //Sun-angle position
+                float SunA = sunDirection;//2.; //Sun-angle position
                 const float SunS = 64.; //Sun-size, higher is smaller
-
-                //Integrates the sky
-                //Integrand: SkyColor.xyz*(1.+0.5*sin(a))
-                //Integral: SkyColor.xyz*(a-0.5*cos(a))
-                //vec3 SI = SkyColor*(a1-a0-0.5*(cos(a1)-cos(a0)));
                 vec3 SI = SkyColor.xyz*(1.+0.5*sin(angle));
-
-                //Integrand: SunColor/(1+SunS*(a-SunA)^2)
-                //Integral: SunColor.xyz*(-atan(sqrt(SunS)*(SunA-a)))/sqrt(SunS)
-                //SI += SunColor*(atan(SSunS*(SunA-a0))-atan(SSunS*(SunA-a1)))*ISSunS;
                 float angleDiff = (angle-SunA); angleDiff *= angleDiff;
                 SI += SunColor/(1.0+SunS*angleDiff);
-
-                gl_FragColor.rgb += SI; //vec3(max(0.0, dot(direction, vec2(0.0, 1.0))));
+                gl_FragColor.rgb += SI;
               }
             }
 
