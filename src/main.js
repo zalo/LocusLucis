@@ -35,10 +35,9 @@ class LocusLucis {
       this.testTexture = texture;
       this.testTexture.minFilter = THREE.NearestFilter;
       this.testTexture.magFilter = THREE.NearestFilter;
-      console.log(this.testTexture);
 
       this.uniforms = {
-        map                   : { value: this.testTexture },
+        //map                   : { value: /*this.testTexture*/ null },
         lineResolution        : { value: 512 },
         angularResolution     : { value: 128 },
         stepDistance          : { value: 0.001 },
@@ -93,6 +92,7 @@ class LocusLucis {
           pc_fragColor = colorToDraw;
         }`);
       Object.assign(this.isovistPass.material.uniforms, this.uniforms);
+      this.isovistPass.material.uniforms["map"] = { value: this.testTexture };
       this.isovistPass.material.uniformsNeedUpdate = true;
       this.isovistPass.material.needsUpdate = true;
       console.log(this.isovistPass.material.uniforms);
@@ -108,6 +108,8 @@ class LocusLucis {
       this.labelMesh.position.set(50, 0, 0);
       this.labelMesh.scale   .set(1, 1, 1);
       this.scene.add(this.labelMesh);
+
+      this.uniforms["map"] = { value: null };
 
       this.reprojectionMaterial = new THREE.ShaderMaterial( {
         side: THREE.FrontSide,
@@ -129,30 +131,8 @@ class LocusLucis {
           #include <common>
           #include <dithering_pars_fragment>
 
-          vec2 boxIntersection( in vec2 ro, in vec2 rd, in vec2 rad ) {
-              vec2 m = 1.0/rd;
-              vec2 n = m*ro;
-              vec2 k = abs(m)*rad;
-              vec2 t1 = -n - k;
-              vec2 t2 = -n + k;
-              float tN = max( t1.x, t1.y );
-              float tF = min( t2.x, t2.y );
-              return vec2( tN, tF );
-          }
-
           void main() {
-            vec2 direction = vec2(cos(stepDirection), sin(stepDirection));
-            vec2 boxIntersections = boxIntersection(vUv, direction, vec2(1.0, 1.0));
-
-            vec4 colorToDraw = vec4(1.0, 1.0, 1.0, 1.0);
-            for(float i = boxIntersections.x; i < 0.0; i += stepDistance) {
-              vec4 sampledColor = texture2D(map, vUv + (direction * i));
-              if(sampledColor.g < 1.0) {
-                colorToDraw = sampledColor;
-              }
-            }
-
-            gl_FragColor = colorToDraw;
+            gl_FragColor = texture2D(map, vUv);
             #include <dithering_fragment>
           }`
       });
@@ -161,9 +141,6 @@ class LocusLucis {
       this.reprojectionMesh.position.set(0, 0, 0);
       this.reprojectionMesh.scale   .set(1, 1, 1);
       this.scene.add(this.reprojectionMesh);
-
-
-
 
     } ); 
 
@@ -188,6 +165,8 @@ class LocusLucis {
 
     if (this.isovistComputation) {
       this.isovistComputation.compute();
+
+      this.uniforms["map"].value = this.isovistComputation.getCurrentRenderTarget(this.isovist).texture;
     }
 
     //if(this.time - this.lastTime < 500){
