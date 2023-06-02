@@ -9,9 +9,7 @@
       <img src="https://img.shields.io/github/license/zalo/LocusLucis" title="License: Apache V2"></a> -->
 </p>
 
-Experiment in Physically Simulated Website Backgrounds
-
-Based (entirely) on [Analytic Direct Illumination](https://www.shadertoy.com/view/NttSW7) by mathis.
+Experiment in 2D Line Sweep Radiosity.
 
  # Building
 

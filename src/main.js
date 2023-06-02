@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { GUI } from '../node_modules/three/examples/jsm/libs/lil-gui.module.min.js';
-import { Debug } from './debug.js';
+import { MultiTargetGPUComputationRenderer } from './MultiTargetGPUComputationRenderer.js';
 
 class LocusLucis {
   constructor() {
-    let debug = new Debug();
+    //let debug = new Debug();
 
     this.container = document.createElement( 'div' );
     document.body.appendChild( this.container );
@@ -22,7 +22,7 @@ class LocusLucis {
     this.time = 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, transparent: true, alpha: true });
-    this.renderer.setPixelRatio(debug.mobile ? 0.1 : window.devicePixelRatio);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(this.width, this.height);
     this.renderer.setAnimationLoop(this.render.bind(this));
     this.renderer.setClearAlpha(0.0);
@@ -31,64 +31,93 @@ class LocusLucis {
     this.renderer.domElement.style.zIndex   = '-1000';
     this.container.appendChild(this.renderer.domElement);
 
-    window.addEventListener('resize', this.resize.bind(this));
-    //window.addEventListener('pointerdown', ()=>{ this.lastTime=this.time; });
-    //window.addEventListener('pointerup', ()=>{ this.lastTime=this.time; });
-    //window.addEventListener('pointermove', ()=>{ this.lastTime=this.time; });
-    //window.addEventListener('wheel', ()=>{ this.lastTime=this.time; });
+    new THREE.TextureLoader().load('./assets/RadiosityTest.png', (texture) => {
+      this.testTexture = texture;
+      this.testTexture.minFilter = THREE.NearestFilter;
+      this.testTexture.magFilter = THREE.NearestFilter;
+      console.log(this.testTexture);
 
-    this.line_geometry = [
-      //new THREE.Vector4(0.1 ,0.1 ,0.9  ,0.3 ), //Floor
-      //new THREE.Vector4(0.1 ,0.1 ,0.05 ,0.95), //Vertical wall
-      //new THREE.Vector4(0.05,0.95,0.4  ,0.8 ), //Small ceiling
-      //new THREE.Vector4(0.5 ,0.77,0.9  ,0.4 ), //Ceiling higher up
-      new THREE.Vector4(0.45 ,0.40 , 0.45 ,0.60),
-      new THREE.Vector4(0.45 ,0.40 , 0.55 ,0.40), 
-      new THREE.Vector4(0.55 ,0.60 , 0.55 ,0.40), 
-      new THREE.Vector4(0.55 ,0.60 , 0.45 ,0.60), 
-      new THREE.Vector4(0.25 ,0.75 , 0.25 ,0.5 ), //Wall in front of emissive
-      new THREE.Vector4(0.725 ,0.8  , 0.75,0.65), //Emissive red
-    ];
+      this.uniforms = {
+        map                   : { value: this.testTexture },
+        lineResolution        : { value: 512 },
+        angularResolution     : { value: 128 },
+        stepDistance          : { value: 0.001 },
+        stepDirection         : { value: 0.00 },
+        outputResolutionScale : { value: 1.0 },
+      }
+  
+      this.gui = new GUI()
+      //this.gui.add(this.uniforms.       lineResolution, 'value', 0.1  , 1.0 ).name('Line Resolution');
+      //this.gui.add(this.uniforms.    angularResolution, 'value', 0.1  , 1.0 ).name('Angular Resolution');
+      this.gui.add(this.uniforms.         stepDistance, 'value', 0.001, 0.01).name('Step Distance');
+      this.gui.add(this.uniforms.        stepDirection, 'value', 0.0,   6.28).name('Step Direction');
+      this.gui.add(this.uniforms.outputResolutionScale, 'value', 0.1  , 1.0 ).name('Quality')
+        .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.outputResolutionScale.value); });
+      this.gui.open();
+  
+      this.isovistComputation = new MultiTargetGPUComputationRenderer(
+                                  this.uniforms.lineResolution.value, this.uniforms.angularResolution.value, this.renderer);
+      //this.shadowMap          = this.gpuCompute.createTexture(); // Set to vertices
 
-    this.uniforms = {
-      lines   : { value: this.line_geometry       },
-      quality : { value: debug.mobile ? 0.1 : window.devicePixelRatio },
-    }
+      window.addEventListener('resize', this.resize.bind(this));
+      this.resize();
 
-    this.resize();
+      this.reprojectionMaterial = new THREE.ShaderMaterial( {
+        side: THREE.FrontSide,
+        //dithering: true,
+        //transparent: true,
+        uniforms: this.uniforms,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+              //gl_Position = vec4( ( uv - 0.5 ) * 2.0, 0.0, 1.0 );
+          }`,
+        fragmentShader: `
+          uniform sampler2D map;
+          uniform float lineResolution, angularResolution, stepDistance, stepDirection, outputResolutionScale;
+          varying vec2 vUv;
 
-    fetch('./assets/Lighting.glsl')
-      .then(data => data.text())
-      .then(shaderText => {
-        console.log("Loaded Lighting Shader!");
+          #include <common>
+          #include <dithering_pars_fragment>
 
-        this.gui = new GUI()
-        this.gui.add(this.uniforms.quality, 'value', 0.1, 1.0).name('Quality')
-          .onChange(() => { this.renderer.setPixelRatio(window.devicePixelRatio * this.uniforms.quality.value); })
-        this.gui.open();
+          vec2 boxIntersection( in vec2 ro, in vec2 rd, in vec2 rad ) {
+              vec2 m = 1.0/rd;
+              vec2 n = m*ro;
+              vec2 k = abs(m)*rad;
+              vec2 t1 = -n - k;
+              vec2 t2 = -n + k;
+              float tN = max( t1.x, t1.y );
+              float tF = min( t2.x, t2.y );
+              return vec2( tN, tF );
+          }
 
-        this.reprojectionMaterial = new THREE.ShaderMaterial( {
-          side: THREE.FrontSide,
-          //dithering: true,
-          //transparent: true,
-          uniforms: this.uniforms,
-          vertexShader: `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                //gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-                gl_Position = vec4( ( uv - 0.5 ) * 2.0, 0.0, 1.0 );
-            }`,
-          fragmentShader: shaderText
-        });
+          void main() {
+            vec2 direction = vec2(cos(stepDirection), sin(stepDirection));
+            vec2 boxIntersections = boxIntersection(vUv, direction, vec2(1.0, 1.0));
 
-        this.reprojectionMaterial.dithering = true;
+            vec4 colorToDraw = vec4(1.0, 1.0, 1.0, 1.0);
+            for(float i = boxIntersections.x; i < 0.0; i += stepDistance) {
+              vec4 sampledColor = texture2D(map, vUv + (direction * i));
+              if(sampledColor.g < 1.0) {
+                colorToDraw = sampledColor;
+              }
+            }
 
-        this.reprojectionMesh = new THREE.Mesh( new THREE.PlaneGeometry( 50, 50 ), this.reprojectionMaterial );
-        this.reprojectionMesh.position.set(0, 0, 0);
-        this.reprojectionMesh.scale   .set(1, 1, 1);
-        this.scene.add(this.reprojectionMesh);
-    });
+            gl_FragColor = colorToDraw;
+            #include <dithering_fragment>
+          }`
+      });
+  
+      this.reprojectionMaterial.dithering = true;
+  
+      this.reprojectionMesh = new THREE.Mesh( new THREE.PlaneGeometry( 50, 50 ), this.reprojectionMaterial );
+      this.reprojectionMesh.position.set(0, 0, 0);
+      this.reprojectionMesh.scale   .set(1, 1, 1);
+      this.scene.add(this.reprojectionMesh);
+
+    } ); 
 
     this.lastTime = this.time;
   }
@@ -105,38 +134,6 @@ class LocusLucis {
   render(timeMS) {
     this.time = timeMS;
     if (this.time == 0) { this.lastTime = this.time; }
-
-    if (this.line_geometry) {
-      this.line_geometry[4].x = 0.25 + 0.05 * Math.sin(this.time * 0.001);
-      //this.line_geometry[5].x = 0.725 + 0.05 * Math.sin(this.time * 0.001);
-      //this.line_geometry[5].z = 0.750 + 0.05 * Math.sin(this.time * 0.001);
-
-      let elem = document.querySelector("img");
-      let rect = elem.getBoundingClientRect();
-      // Left Side
-      this.line_geometry[0].x =        rect.  left / this.width;
-      this.line_geometry[0].y = 1.0 - (rect.bottom / this.height);
-      this.line_geometry[0].z =        rect.  left / this.width;
-      this.line_geometry[0].w = 1.0 - (rect.top / this.height);
-
-      // Bottom Side
-      this.line_geometry[1].x =        rect.  left / this.width;
-      this.line_geometry[1].y = 1.0 - (rect.bottom / this.height);
-      this.line_geometry[1].z =        rect. right / this.width;
-      this.line_geometry[1].w = 1.0 - (rect.bottom / this.height);
-
-      // Right Side
-      this.line_geometry[2].x =        rect. right / this.width;
-      this.line_geometry[2].y = 1.0 - (rect.   top / this.height);
-      this.line_geometry[2].z =        rect. right / this.width;
-      this.line_geometry[2].w = 1.0 - (rect.bottom / this.height);
-
-      // Top Side
-      this.line_geometry[3].x =        rect. right / this.width;
-      this.line_geometry[3].y = 1.0 - (rect.   top / this.height);
-      this.line_geometry[3].z =        rect.  left / this.width;
-      this.line_geometry[3].w = 1.0 - (rect.   top / this.height);
-    }
 
     //if(this.time - this.lastTime < 500){
       this.renderer.render(this.scene, this.camera);
