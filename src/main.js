@@ -73,7 +73,7 @@ class LocusLucis {
 
     this.reprojectionMaterial = new THREE.ShaderMaterial( {
       side: THREE.FrontSide,
-      //dithering: true,
+      dithering: true,
       //transparent: true,
       uniforms: this.uniforms,
       vertexShader: `
@@ -106,6 +106,8 @@ class LocusLucis {
           return fract( sin( sn ) * c );
         }
 
+        #include <dithering_pars_fragment>
+
         void main() {
           gl_FragColor.a = 1.0;
           float increment = 6.28318530718/angularResolution;
@@ -137,6 +139,11 @@ class LocusLucis {
 
           gl_FragColor.rgb /= angularResolution;
           gl_FragColor.rgb = pow(1.-exp(-1.2*gl_FragColor.rgb),vec3(0.45));
+
+          // three.js postprocessing to acount for color spaces
+          #include <tonemapping_fragment>
+          #include <encodings_fragment>
+          #include <dithering_fragment>
         }`
     });
   
