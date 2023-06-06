@@ -9,9 +9,12 @@
       <img src="https://img.shields.io/github/license/zalo/LocusLucis" title="License: Apache V2"></a> -->
 </p>
 
-Experiment in Physically Simulated Website Backgrounds
+Experiments in 2D Radiosity, trying to find the fastest method.
 
-Based (entirely) on [Analytic Direct Illumination](https://www.shadertoy.com/view/NttSW7) by mathis.
+See Experiments here:
+- [Analytic 2D Radiosity via Visible Angle Computation](https://raw.githack.com/zalo/main/index.html) (based on [Analytic Direct Illumination](https://www.shadertoy.com/view/NttSW7) by mathis)
+- [2D Line Sweep Radiosity via Isovist Precomputation](https://raw.githack.com/zalo/LocusLucis/feat-line-sweep/index.html)
+- [2D Radiosity via Per-Pixel Raytracing](https://raw.githack.com/zalo/LocusLucis/feat-raytracing/index.html)
 
  # Building
 
