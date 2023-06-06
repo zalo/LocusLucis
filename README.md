@@ -9,7 +9,12 @@
       <img src="https://img.shields.io/github/license/zalo/LocusLucis" title="License: Apache V2"></a> -->
 </p>
 
-Experiment in 2D Line Sweep Radiosity.
+Experiments in 2D Radiosity, trying to find the fastest method.
+
+See Experiments here:
+- [Analytic 2D Radiosity via Visible Angle Computation](https://raw.githack.com/zalo/main/index.html)
+- [2D Line Sweep Radiosity via Isovist Precomputation](https://raw.githack.com/zalo/LocusLucis/feat-line-sweep/index.html)
+- [2D Radiosity via Per-Pixel Raytracing](https://raw.githack.com/zalo/LocusLucis/feat-raytracing/index.html)
 
  # Building
 
