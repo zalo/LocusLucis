@@ -12,7 +12,7 @@
 Experiments in 2D Radiosity, trying to find the fastest method.
 
 See Experiments here:
-- [Analytic 2D Radiosity via Visible Angle Computation](https://raw.githack.com/zalo/main/index.html) (based on [Analytic Direct Illumination](https://www.shadertoy.com/view/NttSW7) by mathis)
+- [Analytic 2D Radiosity via Visible Angle Computation](https://zalo.github.io/LocusLucis/) (based on [Analytic Direct Illumination](https://www.shadertoy.com/view/NttSW7) by mathis)
 - [2D Line Sweep Radiosity via Isovist Precomputation](https://raw.githack.com/zalo/LocusLucis/feat-line-sweep/index.html)
 - [2D Radiosity via Per-Pixel Raytracing](https://raw.githack.com/zalo/LocusLucis/feat-raytracing/index.html)
 
