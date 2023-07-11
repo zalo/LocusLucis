@@ -89,15 +89,62 @@ class LocusLucis {
         varying vec2 vUv;
 
         bool boxIntersection( in vec2 ro, in vec2 rd, in vec2 rad ) {
-          vec2 m   = 1.0/rd;
-          vec2 n   = m*ro;
-          vec2 k   = abs(m)*rad;
-          vec2 t1  = -n - k;
-          vec2 t2  = -n + k;
+          vec2   m = 1.0/rd;
+          vec2   n = m*ro;
+          vec2   k = abs(m)*rad;
+          vec2  t1 = -n - k;
+          vec2  t2 = -n + k;
           float tN = max( t1.x, t1.y );
           float tF = min( t2.x, t2.y );
           if( tN>tF || tF<0.0) return false;
           return true;
+        }
+
+        // axis aligned box centered at the origin, with dimensions "size" and extruded by "rad"
+        bool roundedboxIntersect( in vec2 ro, in vec2 rd, in vec2 size, in float rad ) {
+            // bounding box
+            vec2   m = 1.0/rd;
+            vec2   n = m*ro;
+            vec2   k = abs(m)*(size+rad);
+            vec2  t1 = -n - k;
+            vec2  t2 = -n + k;
+            float tN = max( t1.x, t1.y );
+            float tF = min( t2.x, t2.y );
+            if( tN>tF || tF<0.0) return false;
+            float  t = tN;
+        
+            // convert to first octant
+            vec2 pos = ro+t*rd;
+            vec2 s   = sign(pos);
+            ro      *= s;
+            rd      *= s;
+            pos     *= s;
+
+            // faces
+            pos -= size;
+            pos  = max( pos.xy, pos.yx );
+            //if( min(pos.x,pos.y) < 0.0 ) return true;
+
+            // some precomputation
+            vec2   oc =  ro-size;
+            vec2   dd =  rd*rd;
+            vec2   oo =  oc*oc;
+            vec2   od =  oc*rd;
+            float ra2 = rad*rad;
+
+            t = 1e20;
+
+            {
+              // corner
+              float b = od.x + od.y;
+              float c = oo.x + oo.y - ra2;
+              float h = b*b - c;
+              if( h>0.0 ) t = -b-sqrt(h); // return true; //
+            }
+
+            if( t>1e19 ) return false;
+            
+            return true;
         }
 
         float rand( const in vec2 uv ) {
@@ -106,19 +153,43 @@ class LocusLucis {
           return fract( sin( sn ) * c );
         }
 
+        vec3 SkyIntegral(float a0, float a1, vec3 SkyColor, vec3 SunColor, float SunA, float SunS, float SSunS, float ISSunS) {
+          //Integrates the sky
+          //Integrand: SkyColor.xyz*(1.+0.5*sin(a))
+          //Integral : SkyColor.xyz*(a-0.5*cos(a))
+          vec3 SI = SkyColor*(a1-a0-0.5*(cos(a1)-cos(a0)));
+
+          //Integrand: SunColor/(1+SunS*(a-SunA)^2)
+          //Integral : SunColor.xyz*(-atan(sqrt(SunS)*(SunA-a)))/sqrt(SunS)
+          SI += SunColor*(atan(SSunS*(SunA-a0))-atan(SSunS*(SunA-a1)))*ISSunS;
+          return SI;
+        }
+
         #include <dithering_pars_fragment>
 
         void main() {
           gl_FragColor.a = 1.0;
+
+          const float   SunS = 64.0; //Sun-size, higher is smaller
+          const float  SSunS = sqrt(SunS);
+          const float ISSunS = 1.0/SSunS;
+
+          float sum = 0.0;
           float increment = 6.28318530718/angularResolution;
-          for (float angle = rand(vUv) * increment; angle < 6.28318530718; angle += increment) {
-            vec2 rayDirection = vec2(cos(angle), 
+          float angle = rand(vUv) * increment;
+          while (angle < 6.28318530718) {
+            float angleDiff = (angle-sunDirection); angleDiff *= angleDiff;
+
+
+          //for (float angle = rand(vUv) * increment; angle < 6.28318530718; angle += increment) {
+            vec2 rayDirection = vec2(cos(angle),
                                      sin(angle));
 
             bool rayGoesToSky = true;
             for(int b = 0; b < 16; b++){
               vec4 box = boxes[b];
-              if (boxIntersection(vUv - box.xy, rayDirection, box.zw)){
+              if ( boxIntersection(vUv - box.xy, rayDirection, box.zw)){
+              //if (roundedboxIntersect(vUv - box.xy, rayDirection, box.zw, 0.02)){
                 rayGoesToSky = false;
                 break;
               }
@@ -128,17 +199,25 @@ class LocusLucis {
               // Add the Sky Lighting Contribution; From: https://www.shadertoy.com/view/NttSW7
               const vec3 SkyColor = vec3(0.2,0.5,1.);
               const vec3 SunColor = vec3(1.,0.7,0.1)*10.;
-              float SunA = sunDirection;//2.; //Sun-angle position
-              const float SunS = 64.; //Sun-size, higher is smaller
+
+              // Individual Sample 
               vec3 SI = SkyColor.xyz*(1.+0.5*sin(angle));
-              float angleDiff = (angle-SunA); angleDiff *= angleDiff;
+              
               SI += SunColor/(1.0+SunS*angleDiff);
+
+              // Continuous Integral
+              //float a0 = angle; float a1 = angle + increment;
+              //vec3 SI = SkyColor*(a1-a0-0.5*(cos(a1)-cos(a0)));
+              //SI += SunColor*(atan(SSunS*(sunDirection-a0))-atan(SSunS*(sunDirection-a1)))*ISSunS;
+
               gl_FragColor.rgb += SI;
             }
+            angle += 1.0/angleDiff;//increment;
+            sum   += 1.0;
           }
 
-          gl_FragColor.rgb /= angularResolution;
-          gl_FragColor.rgb = pow(1.-exp(-1.2*gl_FragColor.rgb),vec3(0.45));
+          gl_FragColor.rgb /= sum;//angularResolution;
+          gl_FragColor.rgb  = pow(1.-exp(-1.2*gl_FragColor.rgb),vec3(0.45));
 
           // three.js postprocessing to acount for color spaces
           #include <tonemapping_fragment>

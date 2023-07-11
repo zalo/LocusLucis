@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            margin: 0;
+            padding: 0;
+            position: absolute;
+            z-index: -1;
+            top: 0px;
+            left: 0px;
+        }
+        .styled-div {
+            position: absolute;
+            border-radius: 10px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            color: white;
+            padding: 10px;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="styled-div" style="padding: 0px; width: 192px; height: 288px; background-size: 192px; background-image:url('images/a44a6678-b898-4542-b82c-8b82be611b44_0_2_384_N.webp'); top: 20px; left: 330px;"></div>
+    <div class="styled-div" style="padding: 0px; width: 192px; height: 192px; background-size: 192px; background-image:url('images/29f81f60-ff7a-4a8c-a6a6-6e1ebcb85f90_0_1_384_N.webp'); top: 20px; left: 530px;"></div>
+    <div class="styled-div" style="padding: 0px; width: 192px; height: 192px; background-size: 192px; background-image:url('images/8074d3cb-75f6-4ded-8beb-5f905988bbad_0_2_384_N.webp'); top: 316px; left: 330px;"></div>
+    <div class="styled-div" style="padding: 0px; width: 192px; height: 288px; background-size: 192px; background-image:url('images/1f97cdf8-ef9f-42e2-8199-58a6f1cffe3c_0_3_384_N.webp'); top: 220px; left: 530px;"></div>
+    <div class="styled-div" style="padding: 0px; width: 392px; height: 196px; background-size: 392px; background-image:url('images/999ab7a2-9258-464e-a0cb-a44281f3b591_0_3_1024_N.webp'); top: 516px; left: 330px;"></div>
+    <div class="styled-div" style="background-color: #b6e; top: 220px; left: 30px;">
+        Potato Gratin
+    </div>
+    <div class="styled-div" style="background-color: #eb6; top: 420px; left: 130px;">
+        Lemons are delicous<br/>
+        This is HTML
+    </div>
+    <div class="styled-div" style="background-color: #6eb; top: 640px; left: 30px;">
+        This is a DIV too!
+        How delightful.
+    </div>
+    <script>
+        /** @type { HTMLCanvasElement } */
+        var canvas = document.getElementById('canvas');
+        var gl = canvas.getContext('webgl2');
+        var vertices = new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]);
+        var vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        var vertexShaderSource = `#version 300 es
+            in vec2 position;
+            out vec2 vuv;
+            void main() {
+                vuv = position * 0.5 + 0.5;
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+        `;
+        var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vertexShaderSource);
+        gl.compileShader(vertexShader);
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            console.error('Vertex shader failed to compile: \n' + gl.getShaderInfoLog(vertexShader));
+        }
+        function drawRoundedRect(context, x, y, width, height, cornerRadius, fillStyle) {
+            context.beginPath();
+            context.moveTo(x + cornerRadius, y);
+            context.arcTo(x + width, y, x + width, y + cornerRadius, cornerRadius);
+            context.arcTo(x + width, y + height, x + width - cornerRadius, y + height, cornerRadius);
+            context.arcTo(x, y + height, x, y + height - cornerRadius, cornerRadius);
+            context.arcTo(x, y, x + cornerRadius, y, cornerRadius);
+            context.closePath();
+            if (fillStyle instanceof Image) {
+                context.save()
+                context.clip()
+                context.drawImage(fillStyle, x, y, width, height);
+                context.restore();
+            } else {
+                context.fillStyle = fillStyle;
+                context.fill();
+            }
+        }
+        function make_fullscreen_program(fragmentShaderSource) {
+            var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragmentShader, '#version 300 es\n'+fragmentShaderSource);
+            gl.compileShader(fragmentShader);
+            if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                console.error('Fragment shader failed to compile: \n' + gl.getShaderInfoLog(fragmentShader));
+            }
+            var shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.error('Shader program failed to link: \n' + gl.getProgramInfoLog(shaderProgram));
+            }
+            gl.useProgram(shaderProgram);
+            var positionLocation = gl.getAttribLocation(shaderProgram, 'position');
+            gl.enableVertexAttribArray(positionLocation);
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+            return shaderProgram;
+        }
+        var mipblurprog = make_fullscreen_program(`
+            precision mediump float;
+            uniform vec2 canvasSize;
+            uniform sampler2D minimapTexture;
+            uniform int minimapLevel;
+            in vec2 vuv;
+            out vec4 color;
+            void main() { 
+                vec2 uv = vuv;
+                vec2 o = vec2(0.75)/canvasSize;
+                // totally made up blur kernel
+                vec2 p = o*1.6;
+                color=(
+                    textureLod(minimapTexture, uv + vec2( o.x,  o.y), float(minimapLevel)) + 
+                    textureLod(minimapTexture, uv + vec2(-o.x,  o.y), float(minimapLevel)) + 
+                    textureLod(minimapTexture, uv + vec2( o.x, -o.y), float(minimapLevel)) + 
+                    textureLod(minimapTexture, uv + vec2(-o.x, -o.y), float(minimapLevel)) +
+                    (textureLod(minimapTexture, uv + vec2( p.x, 0.), float(minimapLevel)) +
+                    textureLod(minimapTexture, uv + vec2(-p.x, 0.), float(minimapLevel)) +
+                    textureLod(minimapTexture, uv + vec2( p.x, -p.y), float(minimapLevel)) +
+                    textureLod(minimapTexture, uv + vec2( p.x,  p.y), float(minimapLevel))) * 0.5
+                    ) * (1./6.);
+            }
+        `)
+        var prog = make_fullscreen_program(`
+            precision mediump float;
+            uniform vec2 canvasSize;
+            uniform vec2 cursorPosition;
+            uniform sampler2D minimapTexture;
+            out vec4 color;
+            void main() {
+                vec2 css = gl_FragCoord.xy;
+                css.y=canvasSize.y-css.y;
+                vec2 uv = css / canvasSize; 
+                float skyshadow =1.;
+                float density = 0.25;
+                vec3 skybounce = vec3(0.);
+                for (float tap = 0.; tap <= 3.; tap += 0.25) {
+                    density *= 0.85;
+                    skyshadow*=1.-density*textureLod(minimapTexture, uv+vec2(0.,tap*-0.02), tap).w;
+                    skybounce+=density*pow(textureLod(minimapTexture, uv+vec2(0.,tap*0.01), tap).xyz, vec3(2.2));
+                }   
+                vec3 skycol = vec3(0.6,0.8,1.) * 0.7;
+                vec3 c = (skyshadow + skybounce.xyz) * skycol;
+
+                
+                vec2 mouserel=(cursorPosition - css) / canvasSize.x;
+                float mousebright = 0.1/ (dot(mouserel,mouserel)+0.075);
+                float mouseshadow = mousebright;
+                density = 0.15;
+                vec2 mouseuv = (cursorPosition) / canvasSize;
+                for (float tap = 0.; tap <= 3.; tap += 0.125) {
+                    density *= 0.95;
+                    mouseshadow*=1.-density*textureLod(minimapTexture, mix(uv, mouseuv, vec2(tap/3.)), tap).w;
+                } 
+                vec2 refpos;
+                refpos.x = mix(uv.x, mouseuv.x, 0.05);
+                refpos.y = mix(uv.y, mouseuv.y, -0.05);
+                vec3 mousebounce = 2. * mouseshadow * mousebright * mousebright * pow(textureLod(minimapTexture, refpos , 2.).xyz, vec3(2.2));
+                c += (mousebounce + mouseshadow) * vec3(1.,0.75,0.5);
+                 c*=0.7;
+                 c+= 0.5*pow(textureLod(minimapTexture, uv + vec2(0.,0.01) , 3.).xyz, vec3(2.2));
+                 c+= 0.75*pow(textureLod(minimapTexture, uv + vec2(0.,0.02) , 4.).xyz, vec3(2.2));
+                 c+= 1.*pow(textureLod(minimapTexture, uv + vec2(0.,0.04) , 5.).xyz, vec3(2.2));
+                color=vec4(pow(c,vec3(1./2.2)),1.);
+            }
+        `);
+
+        var minimap = document.createElement('canvas'); // document.getElementById('minimap');
+        var minimap2d = minimap.getContext('2d')
+        var divs = document.querySelectorAll('.styled-div');
+        var count = divs.length;
+        const scale = 0.5;
+        // load all the div images 
+        var images={}
+        var loadcount = 0;
+        divs.forEach(function(div) {
+            const style = getComputedStyle(div);
+            const bg = style.backgroundImage
+            if (bg!='none') {
+                loadcount++;
+                const i=new Image();
+                i.src = bg.slice(4, -1).replace(/['"]/g, "");
+                i.onload=function() {
+                    images[bg] = i
+                    loadcount--;
+                    if (loadcount==0) resizeCanvas()
+                }                
+            }
+        })
+        const minimapTexture = gl.createTexture();
+
+        var cursorPosition = { x: 0, y: 0 };
+        window.addEventListener('mousemove', function(event) { cursorPosition.x = event.clientX; cursorPosition.y = event.clientY; });
+        function ontouch(event) {
+            event.preventDefault();
+            if (event.touches.length > 0) {
+                cursorPosition.x = event.touches[0].clientX;
+                cursorPosition.y = event.touches[0].clientY;
+            }
+        }
+        // Disable page scrolling on touch drags
+        document.documentElement.style.touchAction = 'none';
+        window.addEventListener('touchstart',ontouch);
+        window.addEventListener('touchend',ontouch);
+        window.addEventListener('touchmove',ontouch);
+        function resizeCanvas() {
+            //var devicePixelRatio = window.devicePixelRatio || 1;
+            //console.log('devicePixelRatio',devicePixelRatio)
+            //devicePixelRatio = Math.min(devicePixelRatio, 0.5); // limit the devicePixelRatio
+            devicePixelRatio = 0.5 // half res
+            canvas.width = window.innerWidth * devicePixelRatio;
+            canvas.height = window.innerHeight * devicePixelRatio;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+
+            minimap.width = window.innerWidth * scale
+            minimap.height = window.innerHeight * scale
+            minimap.style.width = minimap.width + 'px'
+            minimap.style.height = minimap.height + 'px'
+            minimap2d.clearRect(0, 0, minimap.width, minimap.height);
+          divs.forEach(function(div) {
+                const rect = div.getBoundingClientRect();
+                const style = getComputedStyle(div);
+                const cornerRadius = parseInt(style.borderRadius, 10) * scale;
+                const fillColor = style.backgroundColor;
+                const bgImage = style.backgroundImage;
+                drawRoundedRect(minimap2d, rect.left * scale + 1, rect.top * scale + 1, rect.width * scale - 2, rect.height * scale - 2, cornerRadius * scale, bgImage !== 'none' ? images[bgImage] : fillColor);
+            })
+            gl.bindTexture(gl.TEXTURE_2D, minimapTexture);
+            const maxmip = 6;
+            const imageData = minimap2d.getImageData(0, 0, minimap.width, minimap.height);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, maxmip);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            // webgl wont let us read and write the same texture, doh, so make an extra one
+            let extraTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, extraTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, 1);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, minimap.width>>1, minimap.height>>1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+            const fbo = gl.createFramebuffer();
+            gl.useProgram(mipblurprog);
+            var canvasSizeLocation     = gl.getUniformLocation(mipblurprog, 'canvasSize');
+            var minimapTextureLocation = gl.getUniformLocation(mipblurprog, 'minimapTexture');
+            var minimapLevelLocation   = gl.getUniformLocation(mipblurprog, 'minimapLevel');
+            for (var mip = 1; mip<=maxmip;++mip) {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, extraTexture, 0);
+                const mipwidth = (minimap.width >> mip) || 1;
+                const mipheight = (minimap.height >> mip) || 1;
+                console.log(mipwidth, mipheight);
+                gl.viewport(0, 0, mipwidth, mipheight);
+                //gl.clearColor(1.0, 0.0, 0.5, 1.0); 
+                //gl.clear(gl.COLOR_BUFFER_BIT);
+                gl.uniform2f(canvasSizeLocation, mipwidth, mipheight);
+                gl.uniform1i(minimapTextureLocation, 0);
+                gl.uniform1i(minimapLevelLocation, mip-1);
+                gl.activeTexture(gl.TEXTURE0); // Activate a texture unit
+                gl.bindTexture(gl.TEXTURE_2D, minimapTexture);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                // Copy the computed mip level back to the original texture
+                gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fbo);
+                gl.bindTexture(gl.TEXTURE_2D, minimapTexture);
+                //gl.texImage2D(gl.TEXTURE_2D, mip, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+                //gl.texImage2D(gl.TEXTURE_2D, mip, gl.RGBA8, mipwidth, mipheight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.copyTexSubImage2D(gl.TEXTURE_2D, mip, 0, 0, 0, 0, mipwidth, mipheight);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            }
+        }
+        window.addEventListener('resize', resizeCanvas, false);        
+
+        var canvasSizeLocation     = gl.getUniformLocation(prog, 'canvasSize');
+        var cursorPositionLocation = gl.getUniformLocation(prog, 'cursorPosition');
+        var minimapTextureLocation = gl.getUniformLocation(prog, 'minimapTexture');
+            
+        function animate() {
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(1.0, 0.5, 0.0, 1.0); 
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.useProgram(prog);
+            gl.uniform2f(canvasSizeLocation, canvas.width, canvas.height);
+            gl.uniform2f(cursorPositionLocation, cursorPosition.x * 0.5, cursorPosition.y * 0.5);
+            gl.uniform1i(minimapTextureLocation, 0);
+            gl.activeTexture(gl.TEXTURE0); // Activate a texture unit
+            gl.bindTexture  (gl.TEXTURE_2D, minimapTexture);
+            gl.drawArrays   (gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
